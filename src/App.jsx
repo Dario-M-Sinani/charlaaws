@@ -7,6 +7,23 @@ import {
   CheckCircle2, Lock, Sparkles
 } from 'lucide-react'
 
+// Firebase
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, onSnapshot, setDoc, increment } from "firebase/firestore";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD_mPqmK2pVhoDlErdvRKrUDNWWByfs1OQ",
+  authDomain: "charla-hardening-demo.firebaseapp.com",
+  projectId: "charla-hardening-demo",
+  storageBucket: "charla-hardening-demo.firebasestorage.app",
+  messagingSenderId: "104199378602",
+  appId: "1:104199378602:web:287cc58cf63fb9647962d3",
+  measurementId: "G-VW05PPL833"
+};
+
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app);
+
 // Import styles and assets
 import './App.css'
 import yoImg from './assets/yo.jpg'
@@ -14,18 +31,22 @@ import logoImg from './assets/1Asset 4@4x.png'
 
 function App() {
   // --- STATE ---
-  const [votes, setVotes] = useState(() => {
-    const saved = localStorage.getItem('talk_votes')
-    if (saved) {
-      try {
-        return JSON.parse(saved)
-      } catch (e) {
-        console.error(e)
+  const [votes, setVotes] = useState({ love: 0, interest: 0, confuse: 0, dislike: 0 })
+
+  // --- FIRESTORE SYNC ---
+  useEffect(() => {
+    const votesRef = doc(db, 'polls', 'charlaaws');
+    const unsubscribe = onSnapshot(votesRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setVotes(docSnap.data());
+      } else {
+        // Inicializar si el documento no existe
+        setDoc(votesRef, { love: 0, interest: 0, confuse: 0, dislike: 0 });
       }
-    }
-    // Default starter counts for presentation display
-    return { love: 84, interest: 45, confuse: 6, dislike: 2 }
-  })
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const [presenterMode, setPresenterMode] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
@@ -184,25 +205,25 @@ function App() {
   }
 
   // --- CAST VOTE ---
-  const handleVote = (type) => {
+  const handleVote = async (type) => {
     playSound(type)
     triggerConfetti(type)
     
-    setVotes(prev => {
-      const updated = { ...prev, [type]: prev[type] + 1 }
-      localStorage.setItem('talk_votes', JSON.stringify(updated))
-      return updated
-    })
+    // Incremento atómico en Firestore
+    const voteRef = doc(db, 'polls', 'charlaaws');
+    await setDoc(voteRef, {
+      [type]: increment(1)
+    }, { merge: true });
   }
 
   // --- RESET VOTES (SecOps Password Check) ---
-  const handleReset = () => {
+  const handleReset = async () => {
     const password = prompt("Ingrese la contraseña de seguridad (DevSecOps):")
-    if (password === 'admin' || password === 'levo' || password === 'aws') {
+    if (password === 'ReX0908!!') {
       const reseted = { love: 0, interest: 0, confuse: 0, dislike: 0 }
-      setVotes(reseted)
-      localStorage.setItem('talk_votes', JSON.stringify(reseted))
-      alert("Contadores reseteados correctamente.")
+      const voteRef = doc(db, 'polls', 'charlaaws');
+      await setDoc(voteRef, reseted)
+      alert("Contadores reseteados correctamente en Firestore.")
     } else if (password !== null) {
       alert("Acceso denegado: Firma de seguridad inválida 🔒")
     }
